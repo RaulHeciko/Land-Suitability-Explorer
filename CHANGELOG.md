@@ -20,4 +20,5 @@
 - Removed the matplotlib dependency from the library (colour ramps computed directly).
 
 ### Fixed
+- MCP server ported to the mcp 2.x API (`MCPServer`); dependency pinned to `mcp>=2.3,<3`.
 - `t()` accepts placeholders named like its own parameter (e.g. `path`).

@@ -41,7 +41,7 @@ servers and therefore have no MCP counterpart. `cli/mcp.py` is the MCP transport
 
 Transport-pure (no click / rich). `tools.py` holds plain functions decorated with
 `@guarded(...)` (never raise, return `-> dict`); `server.build_server()` registers them on
-FastMCP with `ToolAnnotations` (read-only / write; destructive tools only with
+MCPServer (mcp 2.x) with `ToolAnnotations` (read-only / write; destructive tools only with
 `allow_destructive`). Large results are written by `_artifacts.save_json` and read back with
 `load_json`.
 

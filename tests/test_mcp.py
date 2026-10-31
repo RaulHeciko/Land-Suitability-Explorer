@@ -91,9 +91,15 @@ def test_destructive_tools_registered_only_on_request():
     pytest.importorskip("mcp")
     from lsi_explorer.mcp.server import build_server
 
-    names = {t.name for t in build_server()._tool_manager.list_tools()}
-    assert "pipeline_rebuild" not in names and "area_statistics" in names
-    names = {
-        t.name for t in build_server(allow_destructive=True)._tool_manager.list_tools()
-    }
-    assert "pipeline_rebuild" in names
+    import anyio
+
+    def tools_of(server):
+        return {tool.name: tool for tool in anyio.run(server.list_tools)}
+
+    default = tools_of(build_server())
+    assert "pipeline_rebuild" not in default
+    assert set(default) == {f.__name__ for f in tools.READ_TOOLS + tools.WRITE_TOOLS}
+    assert default["area_statistics"].annotations.read_only_hint is True
+    assert default["pipeline_run"].annotations.destructive_hint is False
+    opted_in = tools_of(build_server(allow_destructive=True))
+    assert opted_in["pipeline_rebuild"].annotations.destructive_hint is True

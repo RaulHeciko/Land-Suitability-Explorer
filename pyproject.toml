@@ -27,7 +27,7 @@ streamlit = { version = ">=1.50", optional = true }
 folium = { version = ">=0.18", optional = true }
 streamlit-folium = { version = ">=0.24", optional = true }
 pyarrow = { version = ">=17", optional = true }
-mcp = { version = ">=1.10", optional = true }
+mcp = { version = ">=2.3,<3", optional = true }
 
 [tool.poetry.extras]
 raster = ["numpy", "pandas", "rasterio", "pyproj", "shapely", "pillow"]

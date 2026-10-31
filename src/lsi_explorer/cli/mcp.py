@@ -19,7 +19,10 @@ def serve(
     except ImportError as exc:  # optional 'mcp' extra not installed
         raise click.ClickException(t("cli.mcp_missing")) from exc
     try:
-        server = build_server(host=host, port=port, allow_destructive=allow_destructive)
+        server = build_server(allow_destructive=allow_destructive)
     except ImportError as exc:
         raise click.ClickException(t("cli.mcp_missing")) from exc
-    server.run(transport="streamable-http" if use_http else "stdio")
+    if use_http:
+        server.run("streamable-http", host=host, port=port)
+    else:
+        server.run("stdio")
