@@ -25,7 +25,6 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 import rasterio
-from matplotlib import colormaps
 from PIL import Image
 from pyproj import Transformer
 
@@ -50,12 +49,29 @@ WEB_MERC_RES0 = 2 * math.pi * 6378137 / TILE
 # ------------------------------------------------------------------ palettes
 
 
-def _lut_continuous(cmap_name: str, fn) -> np.ndarray:
+RDYLGN = [
+    "#a50026",
+    "#d73027",
+    "#f46d43",
+    "#fdae61",
+    "#fee08b",
+    "#ffffbf",
+    "#d9ef8b",
+    "#a6d96a",
+    "#66bd63",
+    "#1a9850",
+    "#006837",
+]
+
+
+def _lut_gradient(stops: list[str]) -> np.ndarray:
+    """Colour-index LUT 0..250 interpolated linearly between hex `stops` (255 = NoData)."""
     lut = np.zeros((256, 4), np.uint8)
-    cmap = colormaps[cmap_name]
-    for i in range(251):
-        lut[i] = (np.array(cmap(fn(i))) * 255).astype(np.uint8)
-        lut[i, 3] = 255
+    rgb = np.array([hex_to_rgb(h) for h in stops], float)
+    pos, x = np.linspace(0, 1, len(stops)), np.arange(251) / 250
+    for ch in range(3):
+        lut[:251, ch] = np.rint(np.interp(x, pos, rgb[:, ch]))
+    lut[:251, 3] = 255
     return lut
 
 
@@ -67,7 +83,7 @@ def _lut_classes(colors: dict[int, tuple]) -> np.ndarray:
 
 
 LUTS = {
-    "score": _lut_continuous("RdYlGn", lambda i: i / 250),
+    "score": _lut_gradient(RDYLGN),
     "delta": _lut_classes({k: hex_to_rgb(c) for k, (_, c) in CHANGE_CLASSES.items()}),
     "classes": _lut_classes(
         {c: hex_to_rgb(h) for c, h in zip(range(1, 11), CLASS_COLORS)}

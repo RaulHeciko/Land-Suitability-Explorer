@@ -1,120 +1,162 @@
-# EOCube - Land Suitability Index (LSI) pipeline and dashboard
+# Land Suitability Explorer
 
-Batch processing (Phases 1-3) of present and future land-suitability rasters, plus a Streamlit
-dashboard to explore them by crop, climate scenario, period and administrative unit.
+Prototype web application and Python library for analysing how climate change scenarios affect
+the land suitability of crops in Romania. It processes the land suitability rasters produced with
+GeoLaSS (Geospatial Land Suitability System) and presents them in an interactive dashboard, for
+deployment on the EOCube.Ro platform.
 
-## Setup
+The project follows the EOCube.Ro development conventions (see `AGENTS.md`): a library layer, a
+Click CLI and an MCP server exposing the same capabilities, Poetry packaging with optional extras,
+English/Romanian localization, ASCII-only sources and `black` formatting.
+
+## Installing
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # tests and formatting
+pip install poetry
+poetry install --with dev --all-extras    # development: everything + tests and black
 ```
 
-If PostGIS/ArcGIS is installed, a system-wide `PROJ_LIB` may point to an incompatible `proj.db`;
-`src/__init__.py` drops such variables automatically for this project.
+or with pip, choosing only the extras you need:
 
-## Input layout
+```bash
+pip install -e ".[app]"      # dashboard + CLI
+pip install -e ".[full]"     # everything, including the MCP server
+```
+
+| Extra | Purpose | Packages |
+|---|---|---|
+| `raster` | Raster I/O and statistics | numpy, pandas, rasterio, pyproj, shapely, pillow |
+| `charts` | Figures and PNG export | plotly, kaleido |
+| `services` | County / UAT boundaries | geopandas |
+| `cli` | `lsi` command line | click |
+| `app` | Dashboard | streamlit, folium, streamlit-folium + raster, charts, services, cli |
+| `mcp` | MCP server | mcp, click |
+| `full` | Everything | all of the above |
+
+The only hard runtime dependency is `pyyaml` (translations). If PostGIS/ArcGIS set a
+system-wide `PROJ_LIB`, `lsi_explorer/__init__.py` drops it so rasterio uses its own `proj.db`.
+
+## Input data
+
+Data paths are relative to the working directory (or `LSI_HOME`); each can be overridden.
 
 ```
-LSI/  (or data/LSI/, or set LSI_DATA_DIR)
+LSI/  (or data/LSI/, or LSI_DATA_DIR)
   prezent/<CROP>/_<CROP>_land_suitability.tif                 continuous score 0-100
   prezent/<CROP>/_<CROP>_land_suitability_10_categories.tif   classes 1-10
   ssp126_2041-2070/<CROP>/...   ssp126_2071-2100/...   ssp245_2041-2070/...   ssp245_2071-2100/...
-data/climate/<period>/tas.tif, pr.tif     optional - needed to compute new driver maps (Phase 3)
-data/mask/study_area.tif                  optional - otherwise the valid-pixel footprint is used
-data/admin/judete.gpkg, uat.gpkg          county / UAT boundaries for the area filter (see below)
-data/crop_names.csv                       optional - columns: code,name; overrides the built-in names
+data/climate/<period>/tas.tif, pr.tif   optional - needed to compute new driver maps (Phase 3)
+data/mask/study_area.tif                optional - otherwise the valid-pixel footprint is used
+data/admin/judete.gpkg, uat.gpkg        county / UAT boundaries (lsi admin fetch-boundaries)
+data/crop_names.csv                     optional - code,name; overrides the built-in crop names
+results/                                outputs (LSI_RESULTS_DIR)
 ```
 
-County and UAT boundaries come from the public geo-spatial.org WFS (the same layers used by
-`eocube.services.geospatialorg`). Download them once (about 15 MB):
+Rasters use Stereo70 (EPSG:3844); a 100 m pixel is 0.01 km2 and all areas are reported in km2.
+Suitability classes: C1 = most suitable (score 90-100) ... C10 = least suitable (0-10).
+Change in suitability (future - present, score points): `< -10`, `-10 to -5`, `-5 to +5`
+(no significant change), `+5 to +10`, `> +10`.
+
+## Command line
 
 ```bash
-python scripts/fetch_admin_boundaries.py
+lsi --version                                   # version and build commit
+lsi catalog list                                # crops and scenarios found
+lsi admin fetch-boundaries                      # county + UAT boundaries from geo-spatial.org
+lsi pipeline run --crop GR --phase 1 --phase 2  # Phases 1-3 (default: all crops, all phases)
+lsi stats area --crop GR --judet Alba --ssp SSP2-4.5 --output alba.json
+lsi app --port 8501                             # dashboard
+lsi mcp serve                                   # MCP server over stdio (--http for HTTP)
+lsi --lang ro ...                               # Romanian interface
 ```
-
-Any scenario folder named `sspXXX_YYYY-YYYY` is picked up automatically. The rasters use Stereo70
-(assigned as EPSG:3844); a 100 m pixel is 0.01 km2. All areas (CSVs, charts, dashboard) are in km2.
-
-Crop codes are shown with their names (e.g. CN = Hemp, GR = Wheat, PB = Corn); the full list is
-`CROP_NAMES` in `src/utils.py`.
-
-### Classes
-
-- Suitability classes C1-C10: C1 is the most suitable (score 90-100), C10 the least (0-10).
-  Colours run from dark green (C1) to red (C10).
-- Change in suitability (future - present, score points), 5 classes:
-  `< -10`, `-10 to -5`, `-5 to +5` (no significant change), `+5 to +10`, `> +10`.
-
-## Run the pipeline
-
-```bash
-python run_pipeline.py                            # all crops, phases 1-3 (~100 s per crop)
-python run_pipeline.py --crops GR PB --phases 1 2  # subset
-python run_pipeline.py --overwrite --no-figures
-```
-
-Each phase also runs on its own: `python -m src.phase1_deltas`, `python -m src.phase2_transitions`,
-`python -m src.phase3_attribution` (all accept `--crops`).
 
 | Phase | Module | Outputs |
 |---|---|---|
-| 0 | `src/preprocessing.py` | cleaning (score outside 0-100 and class outside 1-10 become NoData), alignment to the reference grid, study-area masking |
-| 1 | `src/phase1_deltas.py` | `results/deltas/<CROP>/Delta_Suitability_<SSP>_<period>_<CROP>.tif`, `results/deltas/delta_summary.csv` |
-| 2 | `src/phase2_transitions.py` | `results/transitions/<CROP>/Matrix_*.csv`, `SideBySide_*.csv`, `Transitions_long_*.csv`, `Class_Dynamics_*.csv`; `results/figures/<CROP>/Transition_Matrix_Combined_AllSSPs_<CROP>` and `Diverging_Bars_AllScenarios_<CROP>` (.html/.png) |
-| 3 | `src/phase3_attribution.py` | `results/drivers/<CROP>/Dominant_Driver_*.tif` (uint8 + colour table), `Driver_Summary_<CROP>.csv`, `results/drivers/driver_summary_all.csv`; `results/figures/<CROP>/Dominant_Drivers_Grid_<CROP>` (.html/.png) |
+| 0 | `preprocessing.py` | cleaning (score outside 0-100 and class outside 1-10 become NoData), alignment, study-area masking |
+| 1 | `phase1_deltas.py` | `results/deltas/<CROP>/Delta_Suitability_<SSP>_<period>_<CROP>.tif`, `delta_summary.csv` |
+| 2 | `phase2_transitions.py` | transition matrices and class dynamics (CSV, km2) and their figures |
+| 3 | `phase3_attribution.py` | dominant climate driver rasters, area summaries and figures |
 
-Phase 3 classifies pixels with |dS| > 5 into 8 driver classes from the signs of dS, dT and dP
-(code 0 = no significant change). dT or dP exactly 0 counts as "cold"/"dry".
-Without climate rasters, Phase 3 falls back to the driver rasters already in
-`results/<CROP>/Dominant_Driver_*.tif` (from the earlier workflow) for summaries and charts; the
-`source` column in the summary CSVs says which was used.
+Phase 3 classifies pixels with |dS| > 5 into 8 driver classes from the signs of dS, dT and dP.
+Without climate rasters it summarises the driver rasters already in
+`results/<CROP>/Dominant_Driver_*.tif`.
+
+## MCP server
+
+`lsi mcp serve` (stdio) or `lsi mcp serve --http` exposes the same capabilities as the CLI:
+
+| Tool | CLI | Kind |
+|---|---|---|
+| `catalog_list` | `lsi catalog list` | read-only |
+| `area_statistics` | `lsi stats area` | read-only; full result written to a server-side JSON file |
+| `area_transitions` | - | read-only; reads one scenario from an `area_statistics` result file |
+| `pipeline_run` | `lsi pipeline run` | write |
+| `pipeline_rebuild` | `lsi pipeline run --overwrite` | destructive; only with `--allow-destructive` |
+| `admin_fetch_boundaries` | `lsi admin fetch-boundaries` | write |
+
+Tools never raise: errors are returned as `{"ok": false, "error", "status", "not_found"}`.
+Large results are handed off by file; set `LSI_MCP_ARTIFACT_DIR` (or `EOCUBE_MCP_ARTIFACT_DIR`)
+to a shared volume for multi-replica HTTP deployments.
 
 ## Dashboard
 
-```bash
-streamlit run app/main.py
-```
+`lsi app` starts the Streamlit dashboard with the project theme:
 
-- Sidebar: crop, climate scenario, future period, area of interest (whole area / county / UAT), map style.
-- Map: one layer at a time (suitability present, suitability future, change, climate driver) with an
-  in-map legend. Click any pixel to read all values at that location.
-- Present vs future: two synchronised maps, share of area per change class, all-scenario table.
-- Class changes and Climate drivers: the reference figures, recomputed for the selected area.
+- sidebar: crop, climate scenario, future period, area of interest (whole area / county / UAT);
+- Map: suitability (present / future), change classes and climate drivers at native 100 m
+  resolution (local tile server), click any pixel to read its values, full-screen button;
+- Present vs future: synchronised maps, change-class distribution and scenario summary;
+- Class changes and Climate drivers: transition matrices, class dynamics and driver charts.
 
-The current selection (crop, scenario, period, county / UAT) is kept in the page URL, so a link
-such as `?crop=GR&ssp=SSP2-4.5&period=2071-2100&area=judet&judet=Alba` opens directly on that view.
-Charts export as high-resolution PNG from their toolbar; the map has a full-screen button.
-
-Rasters are served by a small tile server (`src/tileserver.py`, started automatically on 127.0.0.1)
-at their native 100 m resolution. All statistics use every pixel of the selected area and are cached
-on disk after the first view.
+The selection is kept in the page URL (shareable links), e.g.
+`?crop=GR&ssp=SSP2-4.5&period=2071-2100&area=judet&judet=Alba`; add `&lang=ro` for Romanian.
+Charts export as high-resolution PNG from their toolbar.
 
 ## Deploying on EOCube.Ro (JupyterHub)
 
-The EOCube.Ro notebook image (Pangeo based) ships `jupyter-server-proxy`, which the dashboard uses to
-reach both Streamlit and its tile server:
+The EOCube.Ro notebook image (Pangeo based) ships `jupyter-server-proxy`:
 
 ```bash
-pip install -r requirements.txt
-export LSI_DATA_DIR=/path/to/LSI          # if the data is not in ./LSI
-export LSI_TILE_PORT=8765                 # fixed tile-server port (optional)
-streamlit run app/main.py --server.port 8501 --server.headless true \
-    --server.enableCORS false --server.enableXsrfProtection false
+pip install -e ".[app]"
+export LSI_DATA_DIR=/path/to/LSI     # if the data is not in ./LSI
+export LSI_TILE_PORT=8765            # fixed tile-server port (optional)
+lsi app --port 8501 --headless
 ```
 
-Open `https://<hub>/user/<name>/proxy/8501/`. On JupyterHub the tile URLs are built automatically from
-`JUPYTERHUB_SERVICE_PREFIX` as `<prefix>proxy/<tile port>/...`; set `LSI_TILE_BASE_URL` (may contain
-`{port}`) to override them, e.g. behind another reverse proxy.
+Open `https://<hub>/user/<name>/proxy/8501/`. Tile URLs are built from
+`JUPYTERHUB_SERVICE_PREFIX` as `<prefix>proxy/<tile port>/...`; set `LSI_TILE_BASE_URL`
+(may contain `{port}`) to override them.
 
 ## Development
 
 ```bash
-python -m pytest tests -v     # unit, end-to-end (synthetic rasters) and ASCII charset tests
-python -m black .             # formatting
+poetry run pytest tests/ -v     # unit, CLI, MCP, architecture and end-to-end tests
+poetry run black .              # formatting (checked in CI)
 ```
 
-Source files, configuration and this README must be ASCII only (enforced by
-`tests/test_charset_policy.py`); user-facing symbols in code are written as `\uXXXX` escapes.
+- Library modules must not import the CLI layer, the dashboard or CLI-only dependencies;
+  `tests/test_architecture.py` enforces it.
+- Every user-facing capability has a CLI command and an MCP tool calling the same library
+  function; `tests/test_mcp.py` checks the parity.
+- Source files, configuration and this README are ASCII only (`tests/test_charset_policy.py`);
+  user-facing strings live in `src/lsi_explorer/locales/{en,ro}.yml`.
+- Tests never access the network: they use synthetic rasters and mocks.
+- Work on a feature branch and open a merge/pull request; never commit directly to `main`.
+- CI (`.gitlab-ci.yml`, `.github/workflows/ci.yml`) runs `black --check` and `pytest`.
+
+### Versioning
+
+`lsi --version` prints `lsi-explorer <version>, commit <sha12> (clean|dirty)`. For a release
+build, stamp the commit and restore the placeholder afterwards:
+
+```bash
+./scripts/stamp-build-info.sh && poetry build && git checkout -- src/lsi_explorer/_build_info.py
+```
+
+### Licensing
+
+After changing dependencies, regenerate the third-party notice file:
+
+```bash
+pip-licenses --from=mixed --format=plain --with-urls -i lsi-explorer > NOTICE
+```

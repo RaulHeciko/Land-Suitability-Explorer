@@ -6,7 +6,6 @@ and results/deltas/delta_summary.csv.
 
 from __future__ import annotations
 
-import argparse
 
 import numpy as np
 import pandas as pd
@@ -104,18 +103,3 @@ def write_summary(rows: list[dict]) -> None:
     new.sort_values(["crop", "ssp", "horizon"]).to_csv(
         path, index=False, float_format="%.3f"
     )
-
-
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--crops", nargs="*")
-    ap.add_argument("--overwrite", action="store_true")
-    a = ap.parse_args(argv)
-    rows = []
-    for crop in a.crops or list_crops():
-        rows += run_crop(crop, list_scenarios(), a.overwrite)
-    write_summary(rows)
-
-
-if __name__ == "__main__":
-    main()

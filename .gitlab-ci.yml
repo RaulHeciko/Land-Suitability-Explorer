@@ -1,0 +1,19 @@
+stages:
+  - test
+
+default:
+  image: python:3.12-slim
+
+lint:
+  stage: test
+  script:
+    - pip install black
+    - black --check .
+
+test:
+  stage: test
+  before_script:
+    - pip install poetry
+    - poetry install --with dev --all-extras
+  script:
+    - poetry run pytest tests/ -v

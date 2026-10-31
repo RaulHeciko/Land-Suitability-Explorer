@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-import src  # noqa: F401  (drops foreign PROJ_LIB before rasterio is imported)
-from src import charts, tileserver
-from src.phase3_attribution import classify_drivers
-from src.preprocessing import clean_categorical, clean_continuous
-from src.raster_ops import crosstab
-from src.utils import CROP_NAMES, change_class, crop_label, parse_scenario
+import lsi_explorer  # noqa: F401  (drops foreign PROJ_LIB before rasterio is imported)
+from lsi_explorer import charts, tileserver
+from lsi_explorer.phase3_attribution import classify_drivers
+from lsi_explorer.preprocessing import clean_categorical, clean_continuous
+from lsi_explorer.raster_ops import crosstab
+from lsi_explorer.utils import CROP_NAMES, change_class, crop_label, parse_scenario
 
 
 @pytest.mark.parametrize(

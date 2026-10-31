@@ -1,4 +1,4 @@
-"""Land Suitability Index (LSI) processing pipeline."""
+"""Land Suitability Explorer: LSI processing library, CLI, MCP tools and dashboard."""
 
 import os
 import sys
@@ -9,3 +9,5 @@ for _var in ("PROJ_LIB", "PROJ_DATA"):
     _val = os.environ.get(_var, "")
     if _val and not os.path.abspath(_val).startswith(os.path.abspath(sys.prefix)):
         del os.environ[_var]
+
+from .version import __version__  # noqa: E402,F401

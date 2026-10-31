@@ -10,8 +10,8 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
 from rasterio.features import geometry_mask
-from rasterio.transform import Affine, array_bounds
-from rasterio.warp import calculate_default_transform, reproject
+from rasterio.transform import Affine
+from rasterio.warp import reproject
 from rasterio.windows import Window, from_bounds
 
 from .utils import DEFAULT_CRS
@@ -176,82 +176,8 @@ def region_window(
     return Window(c0, r0, max(c1 - c0, 0), max(r1 - r0, 0))
 
 
-def read_region(
-    path: Path, window: Window, out_shape: tuple[int, int], categorical: bool
-) -> np.ndarray:
-    """Read a window of band 1 as float32 (nodata -> NaN), resampled to out_shape."""
-    with rasterio.open(path) as src:
-        resampling = Resampling.nearest if categorical else Resampling.average
-        arr = src.read(
-            1,
-            window=window,
-            out_shape=out_shape,
-            resampling=resampling,
-            out_dtype="float32",
-            boundless=False,
-        )
-        nodata = src.nodata
-    if nodata is not None and not np.isnan(nodata):
-        arr[arr == nodata] = np.nan
-    return arr
-
-
-def window_transform(grid: Grid, window: Window, out_shape: tuple[int, int]) -> Affine:
-    t = rasterio.windows.transform(window, grid.transform)
-    return t * Affine.scale(window.width / out_shape[1], window.height / out_shape[0])
-
-
 def geometry_inside(geoms, transform: Affine, shape: tuple[int, int]) -> np.ndarray:
     """Boolean mask, True inside the given geometries (raster CRS)."""
     return geometry_mask(
         geoms, out_shape=shape, transform=transform, invert=True, all_touched=False
     )
-
-
-def to_web_mercator(rgba: np.ndarray, transform: Affine, crs: CRS):
-    """Warp an RGBA image to EPSG:3857; returns (image, [[south, west], [north, east]]) for Leaflet."""
-    h, w = rgba.shape[:2]
-    left, bottom, right, top = array_bounds(h, w, transform)
-    dst_crs = CRS.from_epsg(3857)
-    dst_t, dw, dh = calculate_default_transform(
-        crs, dst_crs, w, h, left, bottom, right, top
-    )
-    out = np.zeros((4, dh, dw), dtype=np.uint8)
-    for b in range(4):
-        reproject(
-            rgba[..., b],
-            out[b],
-            src_transform=transform,
-            src_crs=crs,
-            dst_transform=dst_t,
-            dst_crs=dst_crs,
-            resampling=Resampling.nearest,
-            src_nodata=None,
-            dst_nodata=0,
-        )
-    from pyproj import Transformer
-
-    l, btm, r, t = array_bounds(dh, dw, dst_t)
-    tr = Transformer.from_crs(dst_crs, "EPSG:4326", always_xy=True)
-    west, south = tr.transform(l, btm)
-    east, north = tr.transform(r, t)
-    return np.moveaxis(out, 0, -1), [[south, west], [north, east]]
-
-
-def colorize(arr: np.ndarray, cmap, vmin: float, vmax: float) -> np.ndarray:
-    """Continuous array -> RGBA uint8 using a matplotlib colormap; NaN is transparent."""
-    norm = np.clip((arr - vmin) / (vmax - vmin), 0, 1)
-    rgba = (cmap(np.nan_to_num(norm)) * 255).astype(np.uint8)
-    rgba[np.isnan(arr), 3] = 0
-    return rgba
-
-
-def colorize_classes(
-    arr: np.ndarray, colors: dict[int, tuple[int, int, int]]
-) -> np.ndarray:
-    rgba = np.zeros(arr.shape + (4,), dtype=np.uint8)
-    for code, rgb in colors.items():
-        m = arr == code
-        rgba[m, :3] = rgb
-        rgba[m, 3] = 255
-    return rgba

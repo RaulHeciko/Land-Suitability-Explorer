@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
-import src  # noqa: F401
-from src import charts
+import lsi_explorer  # noqa: F401
+from lsi_explorer import charts
 
 ROOT = Path(__file__).resolve().parents[1]
 SSPS, PERIODS = ["SSP1-2.6", "SSP2-4.5"], ["2041-2070", "2071-2100"]
@@ -56,5 +56,7 @@ def test_x_axis_title_only_on_bottom_row():
 
 def test_logo_assets_exist():
     for name in ("geolass_icon.png",):
-        data = (ROOT / "app" / "assets" / name).read_bytes()
+        data = (
+            ROOT / "src" / "lsi_explorer" / "dashboard" / "assets" / name
+        ).read_bytes()
         assert data[:8] == b"\x89PNG\r\n\x1a\n"

@@ -11,7 +11,6 @@ Outputs per crop:
 
 from __future__ import annotations
 
-import argparse
 from collections import defaultdict
 
 import numpy as np
@@ -152,16 +151,3 @@ def run_crop(crop: str, scenarios: list[Scenario], figures: bool = True) -> None
             fig_dir / f"Diverging_Bars_AllScenarios_{crop}.html",
             fig_dir / f"Diverging_Bars_AllScenarios_{crop}.png",
         )
-
-
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--crops", nargs="*")
-    ap.add_argument("--no-figures", action="store_true")
-    a = ap.parse_args(argv)
-    for crop in a.crops or list_crops():
-        run_crop(crop, list_scenarios(), figures=not a.no_figures)
-
-
-if __name__ == "__main__":
-    main()

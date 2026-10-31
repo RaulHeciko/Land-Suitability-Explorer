@@ -16,6 +16,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from . import utils
+from .i18n import t
 from .utils import CHANGE_CLASSES, CLASSES, DRIVERS, get_logger
 
 log = get_logger()
@@ -109,7 +110,7 @@ def transition_matrices_figure(
     fig = make_subplots(
         rows=1,
         cols=len(ssps),
-        subplot_titles=[f"{s} scenario" for s in ssps],
+        subplot_titles=[t("charts.scenario", ssp=s) for s in ssps],
         horizontal_spacing=0.07,
     )
     for k, ssp in enumerate(ssps, 1):
@@ -170,7 +171,7 @@ def transition_matrices_figure(
                     yref=f"y{k if k > 1 else ''}",
                 )
         fig.update_xaxes(
-            title_text="Future class",
+            title_text=t("charts.future_class"),
             row=1,
             col=k,
             showgrid=False,
@@ -179,7 +180,7 @@ def transition_matrices_figure(
             constrain="domain",
         )
         fig.update_yaxes(
-            title_text="Present class",
+            title_text=t("charts.present_class"),
             row=1,
             col=k,
             autorange="reversed",
@@ -188,10 +189,13 @@ def transition_matrices_figure(
             scaleanchor=f"x{k if k > 1 else ''}",
             constrain="domain",
         )
-    sub = f"Crop: {crop}{' | ' + region if region else ''} | Cell values ({unit}): <b>{periods[0]}</b>"
+    sub = (
+        f"{t('charts.crop', crop=crop)}{' | ' + region if region else ''} | "
+        f"{t('charts.cell_values', unit=unit)}: <b>{periods[0]}</b>"
+    )
     if len(periods) > 1:
         sub += f" | <span style='color:{PERIOD2_COLOR}'><b>{periods[1]}</b></span>"
-    return _layout(fig, "Land suitability transition matrices", sub, 640)
+    return _layout(fig, t("charts.matrices_title"), sub, 640)
 
 
 def transition_table(m_km2: np.ndarray, div: float = 1.0) -> pd.DataFrame:
@@ -248,7 +252,7 @@ def class_dynamics_figure(
                 x=-lost,
                 orientation="h",
                 marker=dict(color=LOST_COLOR, line=dict(color="#7a3600", width=0.6)),
-                name="Area lost",
+                name=t("charts.lost"),
                 legendgroup="lost",
                 showlegend=first,
                 row=r,
@@ -261,7 +265,7 @@ def class_dynamics_figure(
                 x=gained,
                 orientation="h",
                 marker=dict(color=GAIN_COLOR, line=dict(color="#05385a", width=0.6)),
-                name="Area gain",
+                name=t("charts.gain"),
                 legendgroup="gain",
                 showlegend=first,
                 row=r,
@@ -278,7 +282,7 @@ def class_dynamics_figure(
                 textposition=pos,
                 textfont=dict(size=10),
                 marker=dict(symbol="diamond", size=8, color="black"),
-                name="Net change",
+                name=t("charts.net"),
                 legendgroup="net",
                 showlegend=first,
                 row=r,
@@ -287,7 +291,9 @@ def class_dynamics_figure(
             )
             fig.update_xaxes(
                 range=[-lim, lim],
-                title_text=f"Area change ({unit})" if r == len(ssps) else None,
+                title_text=(
+                    t("charts.area_change", unit=unit) if r == len(ssps) else None
+                ),
                 zeroline=True,
                 zerolinecolor="black",
                 zerolinewidth=1.2,
@@ -300,7 +306,9 @@ def class_dynamics_figure(
                 gridcolor="#eee",
                 row=r,
                 col=c,
-                title_text=f"{ssp}<br>Suitability class" if c == 1 else None,
+                title_text=(
+                    f"{ssp}<br>{t('charts.suitability_class')}" if c == 1 else None
+                ),
             )
     fig.update_layout(
         barmode="overlay",
@@ -316,8 +324,8 @@ def class_dynamics_figure(
     )
     return _layout(
         fig,
-        "Land suitability class dynamics",
-        f"Crop: {crop}{' | ' + region if region else ''}",
+        t("charts.dynamics_title"),
+        f"{t('charts.crop', crop=crop)}{' | ' + region if region else ''}",
         height,
         bottom=90,
     )
@@ -361,11 +369,11 @@ def drivers_grid_figure(
     present = sorted(
         {
             int(c)
-            for t in tables.values()
-            for c in t.loc[(t.code > 0) & (t.area_km2 > 0), "code"]
+            for tbl in tables.values()
+            for c in tbl.loc[(tbl.code > 0) & (tbl.area_km2 > 0), "code"]
         }
     )
-    mx = max([t.loc[t.code > 0, "area_km2"].max() for t in tables.values()] + [1])
+    mx = max([tbl.loc[tbl.code > 0, "area_km2"].max() for tbl in tables.values()] + [1])
     div, unit = area_unit(mx)
     n = max(len(present), 1)
     height, vspace = _rows_geometry(len(ssps), 54 * n + 10, 80)
@@ -378,10 +386,10 @@ def drivers_grid_figure(
     )
     for r, ssp in enumerate(ssps, 1):
         for c, period in enumerate(periods, 1):
-            t = tables.get((ssp, period))
-            if t is None:
+            tbl = tables.get((ssp, period))
+            if tbl is None:
                 continue
-            d = t.set_index("code").loc[present]
+            d = tbl.set_index("code").loc[present]
             v = d.area_km2 / div
             fig.add_bar(
                 y=d.driver,
@@ -403,7 +411,7 @@ def drivers_grid_figure(
             )
             fig.update_xaxes(
                 range=[0, mx / div * 1.3],
-                title_text=f"Area ({unit})" if r == len(ssps) else None,
+                title_text=t("charts.area", unit=unit) if r == len(ssps) else None,
                 gridcolor="#eee",
                 showline=True,
                 linecolor="black",
@@ -422,9 +430,9 @@ def drivers_grid_figure(
     fig.update_layout(bargap=0.4)
     return _layout(
         fig,
-        "Dominant climate drivers area distribution",
-        f"Crop: {crop}{' | ' + region if region else ''} | labels: area ({unit}) and share of the "
-        f"area with significant change",
+        t("charts.drivers_title"),
+        f"{t('charts.crop', crop=crop)}{' | ' + region if region else ''} | "
+        f"{t('charts.drivers_labels', unit=unit)}",
         height,
         bottom=70,
     )
@@ -469,7 +477,7 @@ def change_classes_figure(areas: dict[str, np.ndarray], title: str = "") -> go.F
             orientation="h",
             x=0,
             y=-0.18,
-            title_text="Change in land suitability (points):  ",
+            title_text=t("charts.change_legend"),
             traceorder="normal",
         ),
         margin=dict(l=10, r=10, t=50 if title else 10, b=10),
