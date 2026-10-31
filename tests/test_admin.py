@@ -1,20 +1,11 @@
 """Tests for the county / UAT filter helpers and the boundary download script."""
 
-import importlib.util
-from pathlib import Path
-
 import geopandas as gpd
 from shapely.geometry import box
 
-import src  # noqa: F401
-from src.admin import uat_label, uats_in_county
-
-ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location(
-    "fetch_admin_boundaries", ROOT / "scripts" / "fetch_admin_boundaries.py"
-)
-fetch_admin = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(fetch_admin)
+import lsi_explorer  # noqa: F401
+from lsi_explorer import boundaries as fetch_admin
+from lsi_explorer.admin import uat_label, uats_in_county
 
 
 def _judete():
@@ -67,7 +58,7 @@ def test_tidy_keeps_columns_and_projects_to_stereo70():
 
 
 def test_option_index_from_url():
-    from src.admin import option_index
+    from lsi_explorer.admin import option_index
 
     opts = ["SSP1-2.6", "SSP2-4.5"]
     assert option_index(opts, "SSP1-2.6", 1) == 0

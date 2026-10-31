@@ -25,6 +25,7 @@ SKIPPED_DIRS = {
     "__pycache__",
     ".git",
     ".pytest_cache",
+    "locales",  # translations may use Romanian diacritics (exempt by policy)
 }
 
 

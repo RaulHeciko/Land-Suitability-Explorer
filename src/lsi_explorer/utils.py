@@ -8,7 +8,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+# Base folder for data/ and results/ (default: the current working directory).
+ROOT = Path(os.environ.get("LSI_HOME") or Path.cwd())
 
 
 def _first_existing(*candidates: Path) -> Path:
@@ -218,8 +219,12 @@ CROP_NAMES = {
 
 
 def crop_names() -> dict[str, str]:
-    """Crop code -> display name; data/crop_names.csv (columns: code,name) overrides the defaults."""
-    names = dict(CROP_NAMES)
+    """Crop code -> display name in the active language (locale ``crops.<code>``, else
+    ``CROP_NAMES``); data/crop_names.csv (columns: code,name) overrides both."""
+    from .i18n import t
+
+    names = {c: t(f"crops.{c}") for c in CROP_NAMES}
+    names = {c: (n if n != f"crops.{c}" else CROP_NAMES[c]) for c, n in names.items()}
     if CROP_NAMES_CSV.exists():
         import pandas as pd
 
@@ -299,6 +304,24 @@ def admin_layer_path(level: str) -> Path | None:
         ) and p.stem.lower().startswith(prefixes):
             return p
     return None
+
+
+def catalog_info() -> dict:
+    """Crops and climate scenarios available in the input folder (JSON-serializable)."""
+    names = crop_names()
+    return {
+        "data_dir": str(LSI_DIR),
+        "crops": [{"code": c, "name": names.get(c, c)} for c in list_crops()],
+        "scenarios": [
+            {
+                "ssp": s.ssp_label,
+                "period": s.period,
+                "horizon": s.horizon,
+                "folder": s.folder,
+            }
+            for s in list_scenarios()
+        ],
+    }
 
 
 def get_logger(name: str = "lsi") -> logging.Logger:

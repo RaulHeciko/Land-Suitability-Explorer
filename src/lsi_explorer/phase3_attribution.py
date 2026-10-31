@@ -17,7 +17,6 @@ Outputs:
 
 from __future__ import annotations
 
-import argparse
 
 import numpy as np
 import pandas as pd
@@ -184,21 +183,3 @@ def write_global_summary(frames: list[pd.DataFrame]) -> None:
             [old[~old.crop.isin(new.crop.unique())], new], ignore_index=True
         )
     new.to_csv(path, index=False, float_format="%.3f")
-
-
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--crops", nargs="*")
-    ap.add_argument("--overwrite", action="store_true")
-    ap.add_argument("--no-figures", action="store_true")
-    a = ap.parse_args(argv)
-    write_global_summary(
-        [
-            run_crop(c, list_scenarios(), a.overwrite, not a.no_figures)
-            for c in a.crops or list_crops()
-        ]
-    )
-
-
-if __name__ == "__main__":
-    main()

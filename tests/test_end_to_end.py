@@ -1,62 +1,11 @@
 """End-to-end checks on a tiny synthetic dataset (no real LSI data needed)."""
 
-import numpy as np
 import pytest
-import rasterio
-from rasterio.transform import from_origin
 from rasterio.windows import Window
 
-import src  # noqa: F401
-from src import phase1_deltas, phase2_transitions, tileserver, utils
-from src.raster_ops import grid_of
-from src.region_stats import region_summary
-
-CRS = "EPSG:3844"
-TRANSFORM = from_origin(500000, 500000, 100, 100)
-
-
-def _write(path, arr):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    profile = dict(
-        driver="GTiff",
-        width=arr.shape[1],
-        height=arr.shape[0],
-        count=1,
-        dtype="float32",
-        crs=CRS,
-        transform=TRANSFORM,
-        nodata=-99.0,
-    )
-    with rasterio.open(path, "w", **profile) as dst:
-        dst.write(arr.astype("float32"), 1)
-
-
-@pytest.fixture
-def dataset(tmp_path, monkeypatch):
-    """Present + one future scenario for crop 'XX'; score drops by 12 on the left half."""
-    lsi, res = tmp_path / "LSI", tmp_path / "results"
-    present = np.full((8, 8), 55.0)
-    future = present.copy()
-    future[:, :4] -= 12
-    present[0, 0] = -99.0  # nodata pixel
-    for folder, score in (("prezent", present), ("ssp245_2041-2070", future)):
-        _write(lsi / folder / "XX" / "_XX_land_suitability.tif", score)
-        cls = np.where(score < 0, -99.0, np.clip(10 - score // 10, 1, 10))
-        _write(lsi / folder / "XX" / "_XX_land_suitability_10_categories.tif", cls)
-    monkeypatch.setattr(utils, "LSI_DIR", lsi)
-    for name in (
-        "RESULTS_DIR",
-        "DELTAS_DIR",
-        "TRANSITIONS_DIR",
-        "DRIVERS_DIR",
-        "FIGURES_DIR",
-    ):
-        sub = {"RESULTS_DIR": ""}.get(name, name.split("_")[0].lower())
-        monkeypatch.setattr(utils, name, res / sub)
-        for mod in (phase1_deltas, phase2_transitions):
-            if hasattr(mod, name):
-                monkeypatch.setattr(mod, name, res / sub)
-    return lsi
+from lsi_explorer import phase1_deltas, tileserver, utils
+from lsi_explorer.raster_ops import grid_of
+from lsi_explorer.region_stats import region_summary
 
 
 def test_region_summary(dataset):

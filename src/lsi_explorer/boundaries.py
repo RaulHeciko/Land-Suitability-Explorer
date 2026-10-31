@@ -1,16 +1,18 @@
-"""Download Romanian county (judet) and UAT boundaries into data/admin/ for the dashboard filter.
+"""Romanian county (judet) and UAT boundaries for the area filter.
 
 Uses the same public geo-spatial.org WFS layers as eocube.services.geospatialorg
 (geospatial:ro_judete_poligon and geospatial:ro_uat_poligon). Only the attributes the
 dashboard needs are kept and outlines are simplified by 20 m (well below the 100 m pixel).
-
-    python scripts/fetch_admin_boundaries.py [--out data/admin]
+CLI: ``lsi admin fetch-boundaries``; MCP: ``admin_fetch_boundaries``.
 """
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
+
+from .utils import ADMIN_DIR, get_logger
+
+log = get_logger()
 
 WFS = "https://services.geo-spatial.org/geoserver/ows"
 LAYERS = {
@@ -35,10 +37,14 @@ def tidy(gdf, columns: list[str], tolerance_m: float = TOLERANCE_M):
     return gdf
 
 
-def fetch(out_dir: Path) -> dict[str, Path]:
-    """Download all layers to <out_dir>/<name>.gpkg; returns the written paths."""
+def fetch(out_dir: Path | None = None) -> dict[str, Path]:
+    """Download all layers to ``<out_dir>/<name>.gpkg`` (default: data/admin).
+
+    :return: ``{"judete": path, "uat": path}``
+    """
     import geopandas as gpd
 
+    out_dir = Path(out_dir) if out_dir else ADMIN_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     written = {}
     for name, (layer, columns) in LAYERS.items():
@@ -46,17 +52,5 @@ def fetch(out_dir: Path) -> dict[str, Path]:
         path = out_dir / f"{name}.gpkg"
         gdf.to_file(path, driver="GPKG")
         written[name] = path
-        print(f"{name}: {len(gdf)} features -> {path}")
+        log.info("%s: %d features -> %s", name, len(gdf), path)
     return written
-
-
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--out", default=str(Path(__file__).resolve().parents[1] / "data" / "admin")
-    )
-    fetch(Path(ap.parse_args(argv).out))
-
-
-if __name__ == "__main__":
-    main()
