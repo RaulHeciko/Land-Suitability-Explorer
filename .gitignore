@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+# large inputs / outputs (not versioned)
+LSI/
+data/
+results/
